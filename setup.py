@@ -42,6 +42,8 @@ setup(
     entry_points='''
         [console_scripts]
         datasette=datasette.cli:cli
+        [datasette.connectors]
+        sqlite3=datasette.sqlite3_connector:SQLite3_connector
     ''',
     setup_requires=['pytest-runner'],
     tests_require=[
