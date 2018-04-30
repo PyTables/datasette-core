@@ -1038,8 +1038,9 @@ class Datasette:
     def __init__(
             self, files, num_threads=3, cache_headers=True, page_size=100,
             max_returned_rows=1000, sql_time_limit_ms=1000, cors=False,
-            inspect_data=None, metadata=None, sqlite_extensions=None,
-            template_dir=None, plugins_dir=None, static_mounts=None):
+            inspect_data=None, metadata=None, template_dir=None,
+            plugins_dir=None, static_mounts=None,
+            **kwargs):
         self.files = files
         self.num_threads = num_threads
         self.executor = futures.ThreadPoolExecutor(
@@ -1052,8 +1053,7 @@ class Datasette:
         self.cors = cors
         self._inspect = inspect_data
         self.metadata = metadata or {}
-        self.sqlite_functions = []
-        self.sqlite_extensions = sqlite_extensions or []
+        self.dbconnector_args = kwargs
         self.template_dir = template_dir
         self.plugins_dir = plugins_dir
         self.static_mounts = static_mounts or []
@@ -1149,8 +1149,7 @@ class Datasette:
                             path,
                             plugin_manager=pm,
                             max_returned_rows=self.max_returned_rows,
-                            sqlite_functions=self.sqlite_functions,
-                            sqlite_extensions=self.sqlite_extensions
+                            **self.dbconnector_args
                         )
                         tables, views = connection.inspect()
                         break
