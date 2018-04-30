@@ -656,3 +656,11 @@ def module_from_path(path, name):
         code = compile(file.read(), path, 'exec', dont_inherit=True)
     exec(code, mod.__dict__)
     return mod
+
+
+class DatasetteError(Exception):
+    def __init__(self, message, title=None, error_dict=None, status=500, template=None):
+        self.message = message
+        self.title = title
+        self.error_dict = error_dict or {}
+        self.status = status

@@ -1,10 +1,24 @@
 import sqlite3
 from .utils import (
+    DatasetteError,
     detect_spatialite,
     escape_sqlite,
     get_all_foreign_keys,
+    InvalidSql,
     sqlite_timelimit,
 )
+
+
+def managed_errors(func):
+    def func_wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except (sqlite3.OperationalError, InvalidSql, DatasetteError) as e:
+            raise DatasetteError(str(e), title='Invalid SQL', status=400)
+        except (sqlite3.OperationalError) as e:
+            raise DatasetteError(str(e))
+    return func_wrapper
+
 
 class SQLite3_connector:
     def __init__(
@@ -30,6 +44,7 @@ class SQLite3_connector:
             self.plugin_manager.hook.prepare_connection(conn=conn)
         self.conn = conn
 
+    @managed_errors
     def inspect(self):
         # List tables and their row counts
         tables = {}
@@ -107,6 +122,7 @@ class SQLite3_connector:
 
         return tables, views
 
+    @managed_errors
     def execute(self, sql, params=None, truncate=False, time_limit_ms=1000):
         with sqlite_timelimit(self.conn, time_limit_ms):
             try:

@@ -5,7 +5,6 @@ from sanic.views import HTTPMethodView
 from sanic.request import RequestParameters
 from jinja2 import Environment, FileSystemLoader, ChoiceLoader, PrefixLoader
 import re
-import sqlite3
 from pathlib import Path
 from concurrent import futures
 import asyncio
@@ -25,12 +24,12 @@ from .utils import (
     Filters,
     CustomJSONEncoder,
     compound_keys_after_sql,
+    DatasetteError,
     detect_fts_sql,
     escape_css_string,
     escape_sqlite,
     filters_should_redirect,
     is_url,
-    InvalidSql,
     module_from_path,
     path_from_row_pks,
     path_with_added_args,
@@ -59,13 +58,6 @@ pm.load_setuptools_entrypoints('datasette')
 db_connectors = {}
 for entry_point in pkg_resources.iter_entry_points('datasette.connectors'):
     db_connectors[entry_point.name] = entry_point.load()
-
-class DatasetteError(Exception):
-    def __init__(self, message, title=None, error_dict=None, status=500, template=None):
-        self.message = message
-        self.title = title
-        self.error_dict = error_dict or {}
-        self.status = status
 
 
 class RenderMixin(HTTPMethodView):
@@ -194,20 +186,13 @@ class BaseView(RenderMixin):
         start = time.time()
         status_code = 200
         templates = []
-        try:
-            response_or_template_contexts = await self.data(
-                request, name, hash, **kwargs
-            )
-            if isinstance(response_or_template_contexts, response.HTTPResponse):
-                return response_or_template_contexts
-            else:
-                data, extra_template_data, templates = response_or_template_contexts
-        except (sqlite3.OperationalError, InvalidSql, DatasetteError) as e:
-            raise DatasetteError(str(e), title='Invalid SQL', status=400)
-        except (sqlite3.OperationalError) as e:
-            raise DatasetteError(str(e))
-        except DatasetteError:
-            raise
+        response_or_template_contexts = await self.data(
+            request, name, hash, **kwargs
+        )
+        if isinstance(response_or_template_contexts, response.HTTPResponse):
+            return response_or_template_contexts
+        else:
+            data, extra_template_data, templates = response_or_template_contexts
         end = time.time()
         data['query_ms'] = (end - start) * 1000
         for key in ('source', 'source_url', 'license', 'license_url'):
@@ -490,7 +475,7 @@ class RowTableShared(BaseView):
                 )
                 try:
                     results = await self.execute(database, sql, list(set(ids_to_lookup)))
-                except sqlite3.OperationalError:
+                except DatasetteError:
                     # Probably hit the timelimit
                     pass
                 else:
@@ -873,7 +858,7 @@ class TableView(RowTableShared):
             try:
                 count_rows = list(await self.execute(name, count_sql, params))
                 filtered_table_rows_count = count_rows[0][0]
-            except sqlite3.OperationalError:
+            except DatasetteError:
                 # Almost certainly hit the timeout
                 pass
 
@@ -1033,7 +1018,7 @@ class RowView(RowTableShared):
         ])
         try:
             rows = list(await self.execute(name, sql, {'id': pk_values[0]}))
-        except sqlite3.OperationalError:
+        except DatasetteError:
             # Almost certainly hit the timeout
             return []
         foreign_table_counts = dict(
