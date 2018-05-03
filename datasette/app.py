@@ -150,7 +150,6 @@ class BaseView(RenderMixin):
         """Executes sql against db_name in a thread"""
         conn = getattr(connections, db_name, None)
         if not conn:
-            print(connections, db_name)
             raise Exception("Unexpected connection error: %s connection not found" % db_name)
 
         def sql_operation_in_thread():
@@ -459,28 +458,10 @@ class RowTableShared(BaseView):
         fks = {}
         labeled_fks = {}
         if table_info and expand_foreign_keys:
-            foreign_keys = table_info['foreign_keys']['outgoing']
-            for fk in foreign_keys:
-                label_column = tables.get(fk['other_table'], {}).get('label_column')
-                if not label_column:
-                    # No label for this FK
-                    fks[fk['column']] = fk['other_table']
-                    continue
-                ids_to_lookup = set([row[fk['column']] for row in rows])
-                sql = 'select "{other_column}", "{label_column}" from {other_table} where "{other_column}" in ({placeholders})'.format(
-                    other_column=fk['other_column'],
-                    label_column=label_column,
-                    other_table=escape_sqlite(fk['other_table']),
-                    placeholders=', '.join(['?'] * len(ids_to_lookup)),
-                )
-                try:
-                    results = await self.execute(database, sql, list(set(ids_to_lookup)))
-                except DatasetteError:
-                    # Probably hit the timelimit
-                    pass
-                else:
-                    for id, value in results:
-                        labeled_fks[(fk['column'], id)] = (fk['other_table'], value)
+            conn = getattr(connections, database, None)
+            if not conn:
+                raise Exception("Unexpected connection error: %s connection not found" % db_name)
+            fks, labeled_fks = conn.get_foreign_columns_and_rows(table, rows)
 
         cell_rows = []
         for row in rows:

@@ -144,3 +144,33 @@ class SQLite3_connector:
             return rows, truncated, cursor.description
         else:
             return rows
+
+    def get_foreign_columns_and_rows(self, table, rows):
+        "Fetch foreign key resolutions"
+        fks = {}
+        labeled_fks = {}
+        tables_info, _ = self.inspect()
+        foreign_keys = tables_info[table]['foreign_keys']['outgoing']
+        for fk in foreign_keys:
+            label_column = tables_info.get(fk['other_table'], {}).get('label_column')
+            if not label_column:
+                # No label for this FK
+                fks[fk['column']] = fk['other_table']
+                continue
+            ids_to_lookup = set([row[fk['column']] for row in rows])
+            sql = 'select "{other_column}", "{label_column}" from {other_table} where "{other_column}" in ({placeholders})'.format(
+                other_column=fk['other_column'],
+                label_column=label_column,
+                other_table=escape_sqlite(fk['other_table']),
+                placeholders=', '.join(['?'] * len(ids_to_lookup)),
+            )
+            try:
+                results = await self.execute(sql, list(set(ids_to_lookup)))
+            except sqlite3.OperationalError:
+                # Probably hit the timelimit
+                pass
+            else:
+                for id, value in results:
+                    labeled_fks[(fk['column'], id)] = (fk['other_table'], value)
+
+        return fks, labeled_fks
