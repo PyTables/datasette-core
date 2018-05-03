@@ -167,6 +167,19 @@ class BaseView(RenderMixin):
             self.executor, sql_operation_in_thread
         )
 
+    async def get_foreign_columns_and_rows(self, db_name, table, rows):
+        """Prefetch foreign key resolutions for later expansion"""
+        conn = getattr(connections, db_name, None)
+        if not conn:
+            raise Exception("Unexpected connection error: %s connection not found" % db_name)
+
+        def sql_operation_in_thread():
+            return conn.get_foreign_columns_and_rows(table, rows)
+
+        return await asyncio.get_event_loop().run_in_executor(
+            self.executor, sql_operation_in_thread
+        )
+
     def get_templates(self, database, table=None):
         assert NotImplemented
 
@@ -458,10 +471,7 @@ class RowTableShared(BaseView):
         fks = {}
         labeled_fks = {}
         if table_info and expand_foreign_keys:
-            conn = getattr(connections, database, None)
-            if not conn:
-                raise Exception("Unexpected connection error: %s connection not found" % db_name)
-            fks, labeled_fks = conn.get_foreign_columns_and_rows(table, rows)
+            fks, labeled_fks = await self.get_foreign_columns_and_rows(database, table, rows)
 
         cell_rows = []
         for row in rows:

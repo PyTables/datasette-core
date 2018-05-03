@@ -165,7 +165,7 @@ class SQLite3_connector:
                 placeholders=', '.join(['?'] * len(ids_to_lookup)),
             )
             try:
-                results = await self.execute(sql, list(set(ids_to_lookup)))
+                results = self.execute(sql, list(set(ids_to_lookup)))
             except sqlite3.OperationalError:
                 # Probably hit the timelimit
                 pass
