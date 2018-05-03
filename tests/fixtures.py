@@ -25,9 +25,9 @@ def app_client(sql_time_limit_ms=None):
             sql_time_limit_ms=sql_time_limit_ms or 20,
             metadata=METADATA,
             plugins_dir=plugins_dir,
-        )
-        ds.sqlite_functions.append(
-            ('sleep', 1, lambda n: time.sleep(float(n))),
+            sqlite_functions=[
+                ('sleep', 1, lambda n: time.sleep(float(n)))
+            ]
         )
         yield ds.app().test_client
 
