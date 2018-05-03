@@ -147,13 +147,22 @@ class BaseView(RenderMixin):
             return name, expected, should_redirect
         return name, expected, None
 
-    async def execute(self, db_name, sql, params=None, truncate=False, custom_time_limit=None):
-        """Executes sql against db_name in a thread"""
+    async def run_in_connection_thread(self, db_name, function):
+        """Executes operation in a thread"""
         conn = getattr(connections, db_name, None)
         if not conn:
             raise Exception("Unexpected connection error: %s connection not found" % db_name)
 
-        def sql_operation_in_thread():
+        def operation_in_thread():
+            return function(conn)
+
+        return await asyncio.get_event_loop().run_in_executor(
+            self.executor, operation_in_thread
+        )
+
+    async def execute(self, db_name, sql, params=None, truncate=False, custom_time_limit=None):
+        """Executes sql against db_name in a thread"""
+        def operation_in_thread(conn):
             time_limit_ms=self.ds.sql_time_limit_ms
             if custom_time_limit and custom_time_limit < time_limit_ms:
                 time_limit_ms = custom_time_limit
@@ -164,21 +173,17 @@ class BaseView(RenderMixin):
                 time_limit_ms=time_limit_ms
             )
 
-        return await asyncio.get_event_loop().run_in_executor(
-            self.executor, sql_operation_in_thread
+        return await self.run_in_connection_thread(
+            db_name, operation_in_thread
         )
 
     async def get_foreign_columns_and_rows(self, db_name, table, rows):
         """Prefetch foreign key resolutions for later expansion"""
-        conn = getattr(connections, db_name, None)
-        if not conn:
-            raise Exception("Unexpected connection error: %s connection not found" % db_name)
-
-        def sql_operation_in_thread():
+        def operation_in_thread(conn):
             return conn.get_foreign_columns_and_rows(table, rows)
 
-        return await asyncio.get_event_loop().run_in_executor(
-            self.executor, sql_operation_in_thread
+        return await self.run_in_connection_thread(
+            db_name, operation_in_thread
         )
 
     def get_templates(self, database, table=None):
