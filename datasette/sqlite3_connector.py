@@ -4,7 +4,6 @@ from .utils import (
     detect_spatialite,
     escape_sqlite,
     get_all_foreign_keys,
-    InvalidSql,
     sqlite_timelimit,
 )
 
@@ -13,8 +12,6 @@ def managed_errors(func):
     def func_wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except (sqlite3.OperationalError, InvalidSql, DatasetteError) as e:
-            raise DatasetteError(str(e), title='Invalid SQL', status=400)
         except (sqlite3.OperationalError) as e:
             raise DatasetteError(str(e))
     return func_wrapper

@@ -29,6 +29,7 @@ from .utils import (
     escape_css_string,
     escape_sqlite,
     filters_should_redirect,
+    InvalidSql,
     is_url,
     module_from_path,
     path_from_row_pks,
@@ -198,13 +199,18 @@ class BaseView(RenderMixin):
         start = time.time()
         status_code = 200
         templates = []
-        response_or_template_contexts = await self.data(
-            request, name, hash, **kwargs
-        )
-        if isinstance(response_or_template_contexts, response.HTTPResponse):
-            return response_or_template_contexts
-        else:
-            data, extra_template_data, templates = response_or_template_contexts
+        try:
+            response_or_template_contexts = await self.data(
+                request, name, hash, **kwargs
+            )
+            if isinstance(response_or_template_contexts, response.HTTPResponse):
+                return response_or_template_contexts
+            else:
+                data, extra_template_data, templates = response_or_template_contexts
+        except (InvalidSql, DatasetteError) as e:
+            raise DatasetteError(str(e), title='Invalid SQL', status=400)
+        except DatasetteError:
+            raise
         end = time.time()
         data['query_ms'] = (end - start) * 1000
         for key in ('source', 'source_url', 'license', 'license_url'):
