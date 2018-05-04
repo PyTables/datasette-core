@@ -171,3 +171,9 @@ class SQLite3_connector:
                     labeled_fks[(fk['column'], id)] = (fk['other_table'], value)
 
         return fks, labeled_fks
+
+    def is_view(self, table):
+        return bool(list(self.execute(
+            "SELECT count(*) from sqlite_master WHERE type = 'view' AND name=:n",
+            {'n': table}
+        ))[0][0])

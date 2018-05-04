@@ -566,16 +566,20 @@ class RowTableShared(BaseView):
 
 
 class TableView(RowTableShared):
+    async def is_view(self, db_name, table_name):
+        def operation_in_thread(conn):
+            return conn.is_view(table_name)
+
+        return await self.run_in_connection_thread(
+            db_name, operation_in_thread
+        )
+
     async def data(self, request, name, hash, table):
         table = urllib.parse.unquote_plus(table)
         canned_query = self.ds.get_canned_query(name, table)
         if canned_query is not None:
             return await self.custom_sql(request, name, hash, canned_query['sql'], editable=False, canned_query=table)
-        is_view = bool(list(await self.execute(
-            name,
-            "SELECT count(*) from sqlite_master WHERE type = 'view' and name=:n",
-            {'n': table}
-        ))[0][0])
+        is_view = await self.is_view(name, table)
         view_definition = None
         table_definition = None
         if is_view:
