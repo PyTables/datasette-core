@@ -177,3 +177,13 @@ class SQLite3_connector:
             "SELECT count(*) from sqlite_master WHERE type = 'view' AND name=:n",
             {'n': table}
         ))[0][0])
+
+    def get_definition(self, table, type='table'):
+        res = None
+        rows = list(self.execute(
+            "SELECT sql FROM sqlite_master WHERE name = :n AND type = :t",
+            {'n': table, 't': type}
+        ))
+        if rows:
+            res = rows[0][0]
+        return res

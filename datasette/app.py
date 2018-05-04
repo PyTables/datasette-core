@@ -566,9 +566,17 @@ class RowTableShared(BaseView):
 
 
 class TableView(RowTableShared):
-    async def is_view(self, db_name, table_name):
+    async def is_view(self, db_name, table):
         def operation_in_thread(conn):
-            return conn.is_view(table_name)
+            return conn.is_view(table)
+
+        return await self.run_in_connection_thread(
+            db_name, operation_in_thread
+        )
+
+    async def get_definition(self, db_name, table, type='table'):
+        def operation_in_thread(conn):
+            return conn.get_definition(table, type)
 
         return await self.run_in_connection_thread(
             db_name, operation_in_thread
@@ -583,20 +591,11 @@ class TableView(RowTableShared):
         view_definition = None
         table_definition = None
         if is_view:
-            view_definition = list(await self.execute(
-                name,
-                'select sql from sqlite_master where name = :n and type="view"',
-                {'n': table}
-            ))[0][0]
+            view_definition = await self.get_definition(name, table, type='view')
         else:
-            table_definition_rows = list(await self.execute(
-                name,
-                'select sql from sqlite_master where name = :n and type="table"',
-                {'n': table}
-            ))
-            if not table_definition_rows:
+            table_definition = await self.get_definition(name, table, type='table')
+            if not table_definition:
                 raise NotFound('Table not found: {}'.format(table))
-            table_definition = table_definition_rows[0][0]
         info = self.ds.inspect()
         table_info = info[name]['tables'].get(table) or {}
         pks = table_info.get('primary_keys') or []
